@@ -25,7 +25,6 @@ TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 
-BASE_TOKENS_COUNT = 3
 RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
@@ -42,18 +41,18 @@ def check_tokens():
     """Проверка доступности токенов в перменных окружения."""
     tokens = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
     global_values = globals()
-    counter = 0
+    list_of_tokens = []
     for token_name in tokens:
         token = global_values.get(token_name)
         if not token:
             logging.critical(f'Отсутствие обязательной переменной '
                              f'окружения: {token_name}')
         else:
+            list_of_tokens.append(token_name)
             logging.info(f'Переменная окружения '
                          f'{token_name} получена успешно')
-            counter += 1
 
-    if counter != BASE_TOKENS_COUNT:
+    if len(list_of_tokens) != len(tokens):
         sys.exit(1)
 
 
@@ -76,11 +75,9 @@ def get_api_answer(timestamp):
             params={'from_date': timestamp}
         )
     except requests.ConnectionError as error:
-        logging.error(f'Ошибка подключения: {error}')
-        raise ConnectionException
+        raise ConnectionException from error
     except requests.Timeout as error:
-        logging.error(f'Ошибка тайм-аута: {error}')
-        raise TimeOutException
+        raise TimeOutException from error
     except Exception:
         logging.error('Возникло нестандартное исключение '
                       'при подключении к API')
@@ -122,17 +119,17 @@ def check_response(response):
 
 def parse_status(homework):
     """Парсинг ответа от API."""
-    if 'homework_name' in homework:
-        homework_name = homework.get('homework_name')
-    else:
+    if 'homework_name' not in homework:
         logging.error('Отсутствует ключ "homework_name"')
         raise KeyError('Отсутствует ключ "homework_name"')
 
-    if 'status' in homework:
-        homework_status = homework.get('status')
-    else:
+    homework_name = homework.get('homework_name')
+
+    if 'status' not in homework:
         logging.error('Отсутствует ключ "status"')
         raise KeyError('Отсутствует ключ "status"')
+
+    homework_status = homework.get('status')
 
     if homework_status not in HOMEWORK_VERDICTS:
         raise KeyError(
@@ -149,6 +146,7 @@ def main():
     bot = Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
     previous_message = None
+    error_notified = False
     while True:
         try:
             response = get_api_answer(timestamp)
@@ -162,9 +160,15 @@ def main():
                     previous_message = new_message
             else:
                 logging.debug('Домашних заданий еще нет')
+
+            if error_notified:
+                error_notified = False
         except Exception as error:
-            message = f'Сбой в работе программы: {error}'
-            logging.error(message, exc_info=True)
+            if not error_notified:
+                message = f'Сбой в работе программы: {error}'
+                logging.error(message, exc_info=True)
+                send_message(bot, message)
+                error_notified = True
         finally:
             time.sleep(RETRY_PERIOD)
 
