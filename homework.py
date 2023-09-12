@@ -79,8 +79,6 @@ def get_api_answer(timestamp):
     except requests.Timeout as error:
         raise TimeOutException from error
     except Exception:
-        logging.error('Возникло нестандартное исключение '
-                      'при подключении к API')
         raise UnusualAPIException
 
     status = response.status_code
@@ -92,29 +90,21 @@ def get_api_answer(timestamp):
 def check_response(response):
     """Проверка ответа API."""
     if not isinstance(response, dict):
-        logging.error(f'reponse является типом данных: '
-                      f'{type(response)}')
-        raise TypeError('response не является словарем')
+        raise TypeError(f'response не является словарем {type(response)}')
 
     if 'homeworks' not in response:
-        logging.error('В ответе API отсутствует ключ "homeworks"')
         raise KeyError('В ответе API домашки нет ключа "homeworks"')
 
     if 'current_date' not in response:
-        logging.error('В ответе API отсутствует ключ "current_date"')
         raise KeyError('В ответе API домашки нет ключа "current_date"')
 
     if not isinstance(response['current_date'], int):
-        current_date = response['current_date']
-        logging.error(f'reponse является типом данных: '
-                      f'{type(current_date)}')
-        raise TypeError('response["current_date"] не число')
+        answer = response['current_date']
+        raise TypeError(f'response["current_date"] не число {answer}')
 
     if not isinstance(response['homeworks'], list):
-        list_homeworks = response['homeworks']
-        logging.error(f'reponse является типом данных: '
-                      f'{type(list_homeworks)}')
-        raise TypeError('response["homeworks"] не список')
+        answer = response['homeworks']
+        raise TypeError(f'response["homeworks"] не список {answer}')
 
 
 def parse_status(homework):
@@ -146,7 +136,7 @@ def main():
     bot = Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
     previous_message = None
-    error_notified = False
+    prev_error_message = None
     while True:
         try:
             response = get_api_answer(timestamp)
@@ -161,14 +151,12 @@ def main():
             else:
                 logging.debug('Домашних заданий еще нет')
 
-            if error_notified:
-                error_notified = False
         except Exception as error:
-            if not error_notified:
-                message = f'Сбой в работе программы: {error}'
-                logging.error(message, exc_info=True)
-                send_message(bot, message)
-                error_notified = True
+            new_error_message = f'{error}'
+            if prev_error_message != new_error_message:
+                logging.error(new_error_message, exc_info=True)
+                send_message(bot, new_error_message)
+                prev_error_message = new_error_message
         finally:
             time.sleep(RETRY_PERIOD)
 
