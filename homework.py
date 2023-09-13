@@ -110,13 +110,11 @@ def check_response(response):
 def parse_status(homework):
     """Парсинг ответа от API."""
     if 'homework_name' not in homework:
-        logging.error('Отсутствует ключ "homework_name"')
         raise KeyError('Отсутствует ключ "homework_name"')
 
     homework_name = homework.get('homework_name')
 
     if 'status' not in homework:
-        logging.error('Отсутствует ключ "status"')
         raise KeyError('Отсутствует ключ "status"')
 
     homework_status = homework.get('status')
